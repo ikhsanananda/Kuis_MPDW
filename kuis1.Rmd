@@ -60,6 +60,7 @@ hist(ekspor_ts, main = "Histogram Volume Ekspor")
 ```{r}
 #Hubungan dengan p-value
 pvalue <- t.test(data$Kurs..Rp.US..,data$Volume.ekspor.neto..kg.)
+pvalue
 pvalue$p.value
 pvalue$p.value<0.05 #Peubah saling bebas
 pvalue
