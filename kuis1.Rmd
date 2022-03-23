@@ -1,0 +1,250 @@
+---
+title: "KUIS MPDW"
+output: r_script
+---
+```{r}
+#Import library
+library(pastecs)
+library(normtest)
+library(car)
+library(lmtest)
+library(dLagM)
+library(MLmetrics)
+library(orcutt)
+```
+
+```{r}
+#Baca data
+data <-read.csv("C://Users//ikhsan//OneDrive//Documents//MPDW//kuis//kuis.csv")
+summary(data)
+head(data)
+View(data)
+class(data)
+stat.desc(data)
+```
+
+```{r}
+#Check outlier
+par(mfrow=c(1,2))
+boxplot(data$Kurs..Rp.US..)$out
+title("Boxplot Kurs")
+boxplot(data$Volume.ekspor.neto..kg.)$out
+title("Boxplot Volume Ekspor")
+```
+
+```{r}
+#Pergerakan data kurs
+par(mfrow=c(2,2))
+kurs_ts <- ts(data$Kurs..Rp.US..,start=c(2000,1),end=c(2019,9), frequency = 12)
+plot(kurs_ts, 
+     col="navyblue", 
+     xlab="Tahun", 
+     ylab="Kurs",
+     main="Pergerakan Peubah Kurs")
+
+#Pergereakan data volume ekspor
+ekspor_ts <- ts(data$Volume.ekspor.neto..kg., start=c(2000,1), end=c(2019, 9), frequency = 12)
+plot(ekspor_ts, 
+     col="navyblue", 
+     xlab="Tahun", 
+     ylab="Volume Ekspor",
+     main="Pergerakan Peubah Volume Ekspor")
+
+#histogram kurs
+hist(kurs_ts, main = "Histogram Kurs")
+
+#histogram volume ekspor
+hist(ekspor_ts, main = "Histogram Volume Ekspor")
+```
+
+```{r}
+#Hubungan dengan p-value
+pvalue <- t.test(data$Kurs..Rp.US..,data$Volume.ekspor.neto..kg.)
+pvalue$p.value
+pvalue$p.value<0.05 #Peubah saling bebas
+pvalue
+
+#Korelasi dengan spearman
+korelasi <- cor(data$Kurs..Rp.US..,data$Volume.ekspor.neto..kg., method = "pearson")
+korelasi
+
+#plot hubungan
+plot(kurs_ts, ekspor_ts,
+     type="p",
+     col="navyblue", 
+     xlab="Kurs", 
+     ylab="Volume Ekspor", 
+     main="Hubungan antara kurs dan volume ekspor")
+```
+
+```{r}
+#Tranformasi logaritmik
+kurs_ts_log <- log10(kurs_ts)
+ekspor_ts_log <- log10(ekspor_ts)
+
+par(mfrow=c(2,2))
+plot(kurs_ts, 
+     col="navyblue", 
+     xlab="Tahun", 
+     ylab="Kurs",
+     main="Kurs Sebelum Transformasi")
+plot(kurs_ts_log, 
+     col="navyblue", 
+     xlab="Tahun", 
+     ylab="Kurs",
+     main="Kurs Setelah Transformasi")
+plot(ekspor_ts, 
+     col="navyblue", 
+     xlab="Tahun", 
+     ylab="Volume Ekspor",
+     main="Ekspor Sebelum Transformasi")
+plot(ekspor_ts_log, 
+     col="navyblue", 
+     xlab="Tahun", 
+     ylab="Volume Ekspor",
+     main="Ekspor Setelah Transformasi")
+
+par(mfrow=c(2,2))
+hist(kurs_ts, main = "Kurs Sebelum Transformasi")
+hist(kurs_ts_log, main = "Kurs Setelah Transformasi")
+hist(ekspor_ts, main = "Ekspor Sebelum Transformasi")
+hist(ekspor_ts_log, main = "Ekspor Setelah Transformasi")
+
+par(mfrow=c(1,2))
+plot(kurs_ts, ekspor_ts,
+     type="p",
+     col="navyblue", 
+     xlab="Kurs", 
+     ylab="Volume Ekspor", 
+     main="Sebelum Transformasi")
+plot(kurs_ts_log, ekspor_ts_log,
+     type="p",
+     col="navyblue", 
+     xlab="Kurs", 
+     ylab="Volume Ekspor", 
+     main="Setelah Transformasi")
+```
+
+```{r}
+#Bagi data training dan testing 80 20
+data2 <- data
+data2$Kurs..Rp.US.. <- log10(data2$Kurs..Rp.US..)
+data2$Volume.ekspor.neto..kg. <- log10(data2$Volume.ekspor.neto..kg.)
+train <- data2[1:190,]
+View(train)
+test <- data2[191:237,]
+View(test)
+```
+
+```{r}
+#analisis regresi train
+regresi <- lm(train$Volume.ekspor.neto..kg. ~ train$Kurs..Rp.US..)
+summary(regresi)
+plot(train$Kurs..Rp.US.., train$Volume.ekspor.neto..kg., 
+     type="p", 
+     col="navyblue", 
+     xlab = "Kurs", 
+     ylab = "Volume ekspor", 
+     main="Uji Asumsi dengan Regresi")
+lines(train$Kurs..Rp.US.., regresi$fitted.values, col="red", lwd=1)
+```
+
+```{r}
+#Visualisasi autokorelasi sisaan
+residu <- regresi$residuals
+residu_ts <- ts(residu, start = c(2000,1), end = c(2019,9), frequency = 12)
+
+par(mfrow=c(2,2))
+plot(regresi$fitted.values, regresi$residuals,
+     main = "Residual vs Fitted",
+     xlab = "Predictions", 
+     ylab = "Residuals", 
+     ylim = c(-2.5, 2.5))
+abline(h=0, lty=2)
+ts.plot(residu_ts, type="l", ylab = "Residuals")
+title("Residual vs Order")
+abline(h=0, lty=2)
+hist(regresi$residuals, main="Histogram of Residuals")
+qqnorm(regresi$residuals)
+qqline(regresi$residuals)
+```
+
+```{r}
+#Melihat apakah terdapat autokorelasi
+#Uji asumsi residu
+jb.norm.test(regresi$residuals)
+
+#uji autokorelasi durbin watson
+dwtest(regresi)
+
+#uji autokorelasi breusch godfrey
+bgtest(train$Volume.ekspor.neto..kg. ~ train$Kurs..Rp.US.., order = 1)
+```
+
+```{r}
+#Upaya menghilangkan autokorelasi
+#Penambahan data trend
+trend <- seq(1,190)
+str(data2)
+regresi2 <- lm(train$Volume.ekspor.neto..kg. ~ train$Kurs..Rp.US..+trend)
+dwtest(regresi2)
+
+#Persamaan kuadratik
+train2 <- train$Kurs..Rp.US..*train$Kurs..Rp.US..
+regresi3 <- lm(train$Volume.ekspor.neto..kg. ~ train$Kurs..Rp.US..+train2)
+dwtest(regresi3)
+
+#Prosedur cochrane-orcutt
+regresi4 <- cochrane.orcutt(regresi)
+summary(regresi4)
+```
+
+```{r}
+#Peubah Lag Cross Corelation Function
+par(mfrow=c(1,1))
+ccf(data2$Kurs..Rp.US..,data2$Volume.ekspor.neto..kg.)
+acf(data2$Kurs..Rp.US..)
+acf(data2$Volume.ekspor.neto..kg.)
+```
+
+```{r}
+#Penentuan Model
+#Model Koyck
+model.koyck = koyckDlm(x = data2$Kurs..Rp.US.., y = data2$Volume.ekspor.neto..kg.)
+summary(model.koyck)
+
+#Model Polynomial
+model.poly = polyDlm(x = data2$Kurs..Rp.US.., y = data2$Volume.ekspor.neto..kg., q=5, k=2, show.beta = T)
+summary(model.poly)
+
+#Model Autoregressive
+model.ardl = ardlDlm(x = data2$Kurs..Rp.US.., y = data2$Volume.ekspor.neto..kg., p = 1, q = 1)
+summary(model.ardl)
+```
+
+
+```{r}
+#strategi penentuan model dengan data train
+#Model Koyck
+model.koyck2 = koyckDlm(x = train$Kurs..Rp.US.., y = train$Volume.ekspor.neto..kg.)
+summary(model.koyck2)
+
+#Model Polynomial
+model.poly2 = polyDlm(x = train$Kurs..Rp.US.., y = train$Volume.ekspor.neto..kg.,q=5,k=2,show.beta = T)
+summary(model.poly2)
+
+#Model autoregressive
+model.ardl2 = ardlDlm(x = train$Kurs..Rp.US.., y = train$Volume.ekspor.neto..kg., p=1, q=1)
+summary(model.ardl2)
+
+#forecast
+fore.koyck2 <- forecast(model=model.koyck2, x=test$Kurs..Rp.US.., h=47) #Kyock
+fore.poly2 <- forecast(model=model.poly2, x=test$Kurs..Rp.US.., h=47) #Poly
+fore.ardl2 <- forecast(model=model.ardl2,x=test$Kurs..Rp.US..,h=47) #Autoreg
+
+#MAPE
+MAPE(fore.koyck2$forecasts,test$Volume.ekspor.neto..kg.) #Kyock
+MAPE(fore.poly2$forecasts,test$Volume.ekspor.neto..kg.) #Poly
+MAPE(fore.ardl2$forecasts,test$Volume.ekspor.neto..kg.) #Autoreg
+```
+
